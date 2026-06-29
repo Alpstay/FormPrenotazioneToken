@@ -377,7 +377,7 @@
       Le prenotazioni per <strong>oggi</strong> si chiudono alle <strong>ore 14:00</strong>.
       Riceverai conferma dalla nostra reception.
     </div>
-    <div class="hint" id="guest-hint" style="display:none;margin:-10px 0 18px">Dati ricordati su questo dispositivo · <a href="#" onclick="clearGuest();return false;" style="color:var(--gold-deep)">cancella</a></div>
+    <div class="hint" id="guest-hint" style="display:none"></div>
 
     <form id="booking" novalidate>
       <div class="two">
@@ -501,7 +501,7 @@ const STAFF_PASS='admin1234';
 
 /* Invio automatico via Google Apps Script: incolla qui l'URL del Web App (…/exec).
    Lasciandolo vuoto, l'app torna ad aprire l'app di posta (mailto). */
-const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyTwsrDN1dDdjLxZJgcSaStZsdCVAPUY7rTfxxdzqK9-Phewq4R4KEmK-N0XVEi_0uZ/exec';
+const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbzWZLvi5E8d3KPcS0BEXUi8I37wTeb4zwgBD11s0VEOHX8CHzQQf101sHCWVfAoq_n-/exec';
 
 let experiences=[];
 let currentExp=null;
@@ -572,27 +572,20 @@ function fillForm(e){
   $('booking').reset(); $('f_persone').value=2;
   const t=todayLocal(); $('f_data').min=t; $('f_data').value=t;
   document.querySelectorAll('#booking .field').forEach(f=>f.classList.remove('invalid'));
-  prefillGuest();
+  const gh=$('guest-hint'); if(gh) gh.style.display='none';
 }
 
-/* ---- autofill ospite (memoria locale, solo su questo dispositivo) ---- */
+/* ---- pulizia form / memoria ospite ---- */
 const GUEST_KEY='alpstay_guest';
-function loadGuest(){ try{ return JSON.parse(localStorage.getItem(GUEST_KEY)||'null'); }catch(_){ return null; } }
-function saveGuest(g){ try{ localStorage.setItem(GUEST_KEY, JSON.stringify(g)); }catch(_){} }
-function prefillGuest(){
-  const g=loadGuest(); const hint=$('guest-hint');
-  if(!g){ if(hint) hint.style.display='none'; return; }
-  if(g.nome) $('f_nome').value=g.nome;
-  if(g.cognome) $('f_cognome').value=g.cognome;
-  if(g.mail) $('f_mail').value=g.mail;
-  if(g.tel) $('f_tel').value=g.tel;
-  if(hint) hint.style.display='block';
-}
 function clearGuest(){
   try{ localStorage.removeItem(GUEST_KEY); }catch(_){}
-  ['f_nome','f_cognome','f_mail','f_tel'].forEach(id=>{ if($(id)) $(id).value=''; });
-  const hint=$('guest-hint'); if(hint) hint.style.display='none';
-  if($('f_nome')) $('f_nome').focus();
+}
+function resetBooking(){
+  clearGuest();
+  $('booking').reset(); $('f_persone').value=2;
+  const t=todayLocal(); $('f_data').min=t; $('f_data').value=t;
+  document.querySelectorAll('#booking .field').forEach(f=>f.classList.remove('invalid'));
+  const gh=$('guest-hint'); if(gh) gh.style.display='none';
 }
 function openForm(id,preview){
   const e=experiences.find(x=>x.id===id); if(!e) return;
@@ -621,7 +614,6 @@ function bookingSubmit(ev){
   if(wantDT){ if(!f.data.value)bad(f.data); if(!f.ora.value)bad(f.ora); }
   if(!(parseInt(f.persone.value,10)>=1))bad(f.persone);
   if(!ok)return;
-  saveGuest({nome:f.nome.value.trim(),cognome:f.cognome.value.trim(),mail:f.mail.value.trim(),tel:f.tel.value.trim()});
   const e=currentExp;
   const dataFmt=f.data.value ? new Date(f.data.value+'T00:00:00').toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : f.data.value;
   const subject=`Prenotazione esperienza — ${e.name} (${e.hotel||'AlpStay'})`;
@@ -634,19 +626,22 @@ function bookingSubmit(ev){
   const body=lines.join('\r\n');
   const mailtoHref=`mailto:info@alpstay.eu?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 
-  if(APPS_SCRIPT_URL){
-    const btn=$('submit-btn'); const lbl=btn.textContent;
+  const btn=$('submit-btn');
+  const LBL='Invia richiesta di prenotazione';
+  const done=()=>{ btn.disabled=false; btn.textContent=LBL; resetBooking(); show('success'); };
+
+  if(APPS_SCRIPT_URL && navigator.onLine!==false){
     btn.disabled=true; btn.textContent='Invio in corso…';
     const escHtml=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     const html=lines.map(escHtml).join('<br>');
     const payload=JSON.stringify({ to:'info@alpstay.eu', subject:subject, html:html, replyTo:f.mail.value.trim() });
-    fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload})
-      .then(()=>{ show('success'); })
-      .catch(()=>{ window.location.href=mailtoHref; setTimeout(()=>show('success'),300); })
-      .finally(()=>{ btn.disabled=false; btn.textContent=lbl; });
+    /* no-cors: la risposta non è leggibile, quindi inviamo e procediamo (non blocchiamo l'UI sul fetch) */
+    try{ fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',body:payload}); }catch(_){}
+    setTimeout(done,900);
   } else {
+    /* nessun endpoint o offline: ripiego sull'app di posta */
     window.location.href=mailtoHref;
-    setTimeout(()=>show('success'),350);
+    setTimeout(done,400);
   }
 }
 
