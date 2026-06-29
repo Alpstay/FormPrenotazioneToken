@@ -452,12 +452,12 @@
       <div class="icon">✓</div>
       <h2 style="margin-bottom:12px">Richiesta inviata</h2>
       <p class="muted" style="max-width:430px;margin:0 auto 6px">
-        Si è aperta la tua app di posta con il riepilogo per <strong>info@alpstay.eu</strong>.
-        Premi <em>Invia</em> per completare. La reception ti confermerà la disponibilità.
+        La tua richiesta di prenotazione è stata inoltrata alla reception di <strong>AlpStay</strong>.
+        Riceverai conferma della disponibilità al più presto.
       </p>
-      <p class="muted" style="font-size:12.5px;margin-top:18px">Non si è aperta la posta? Scrivi a
+      <p class="muted" style="font-size:12.5px;margin-top:18px">Per qualsiasi necessità:
         <a href="mailto:info@alpstay.eu" style="color:var(--gold-deep)">info@alpstay.eu</a>
-        o chiama <a href="tel:+390471774444" style="color:var(--gold-deep)">+39 0471 774444</a>.</p>
+        · <a href="tel:+390471774444" style="color:var(--gold-deep)">+39 0471 774444</a>.</p>
       <button class="btn btn-ghost" style="margin-top:22px" onclick="show('experiences')">Torna alle esperienze</button>
     </div>
   </section>
@@ -498,6 +498,10 @@
 /* Credenziali staff: impostate QUI nel codice, non nel database. */
 const STAFF_USER='alpstay';
 const STAFF_PASS='admin1234';
+
+/* Invio automatico via Google Apps Script: incolla qui l'URL del Web App (…/exec).
+   Lasciandolo vuoto, l'app torna ad aprire l'app di posta (mailto). */
+const APPS_SCRIPT_URL='https://script.google.com/macros/s/AKfycbyTwsrDN1dDdjLxZJgcSaStZsdCVAPUY7rTfxxdzqK9-Phewq4R4KEmK-N0XVEi_0uZ/exec';
 
 let experiences=[];
 let currentExp=null;
@@ -628,8 +632,22 @@ function bookingSubmit(ev){
   pren.push(`Numero di persone: ${f.persone.value.trim()}`);
   lines.push(...pren,'','— Dati ospite —',`Nome: ${f.nome.value.trim()}`,`Cognome: ${f.cognome.value.trim()}`,`Email: ${f.mail.value.trim()}`,`Telefono: ${f.tel.value.trim()}`,`Note: ${$('f_note').value.trim()||'—'}`,'',`Inviato il: ${new Date().toLocaleString('it-IT')}`);
   const body=lines.join('\r\n');
-  window.location.href=`mailto:info@alpstay.eu?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  setTimeout(()=>show('success'),350);
+  const mailtoHref=`mailto:info@alpstay.eu?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+
+  if(APPS_SCRIPT_URL){
+    const btn=$('submit-btn'); const lbl=btn.textContent;
+    btn.disabled=true; btn.textContent='Invio in corso…';
+    const escHtml=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const html=lines.map(escHtml).join('<br>');
+    const payload=JSON.stringify({ to:'info@alpstay.eu', subject:subject, html:html, replyTo:f.mail.value.trim() });
+    fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body:payload})
+      .then(()=>{ show('success'); })
+      .catch(()=>{ window.location.href=mailtoHref; setTimeout(()=>show('success'),300); })
+      .finally(()=>{ btn.disabled=false; btn.textContent=lbl; });
+  } else {
+    window.location.href=mailtoHref;
+    setTimeout(()=>show('success'),350);
+  }
 }
 
 /* ---- login ---- */
