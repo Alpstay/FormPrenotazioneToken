@@ -724,10 +724,13 @@ function formUrl(id){
   return base+'#book='+id;
 }
 async function copyLink(id,ev){
-  ev.stopPropagation(); const url=formUrl(id); let done=false;
+  ev.stopPropagation();
+  const btn=ev.currentTarget||ev.target;   /* salvare PRIMA dell'await: dopo, currentTarget è null */
+  const url=formUrl(id); let done=false;
   try{ await navigator.clipboard.writeText(url); done=true; }catch(_){}
   if(!done){ try{ const ta=document.createElement('textarea'); ta.value=url; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.focus(); ta.select(); done=document.execCommand('copy'); document.body.removeChild(ta);}catch(_){} }
-  const btn=ev.currentTarget, old=btn.textContent; btn.textContent=done?'✓ Copiato':'Seleziona e copia';
+  if(!btn) return;
+  const old=btn.textContent; btn.textContent=done?'✓ Copiato':'Seleziona e copia';
   setTimeout(()=>{btn.textContent=old;},1800);
 }
 function metaLine(e){
